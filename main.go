@@ -18,6 +18,9 @@ const (
 	done
 )
 
+/* Model Management */
+var models []tea.Model
+
 /*STYLING*/
 var (
 	ColumnStyle = lipgloss.NewStyle().
@@ -43,6 +46,14 @@ func (t Task) FilterValue() string {
 	return t.title
 }
 
+func (t *Task) Next() {
+	if t.status == done {
+		t.status = todo
+	} else {
+		t.status++
+	}
+}
+
 // Getters
 func (t Task) Title() string       { return t.title }
 func (t Task) Description() string { return t.description }
@@ -65,17 +76,27 @@ func New() *Model {
 func (m *Model) Next() {
 	if m.focused == done {
 		m.focused = todo
-	}else {
+	} else {
 		m.focused++
 	}
 }
+
 // TODO go to previous list
 func (m *Model) Prev() {
 	if m.focused == todo {
 		m.focused = done
-	}else {
+	} else {
 		m.focused--
 	}
+}
+
+func (m Model) MoveToNext() tea.Cmd {
+	selectedItem := m.lists[m.focused].SelectedItem()
+	selectedTask := selectedItem.(Task)
+	m.lists[selectedTask.status].RemoveItem(m.lists[m.focused].Index())
+	selectedTask.Next()
+	m.lists[selectedTask.status].InsertItem(len(m.lists[selectedTask.status].Items())-1, list.Item(selectedTask))
+	return nil
 }
 
 // TODO call this in tea.WindowSizeMsg
@@ -115,10 +136,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		if !m.loaded {
-			ColumnStyle.Width(msg.Width/divisor)
-			FocusedStyle.Width(msg.Width/divisor)
-			ColumnStyle.Height(msg.Height-divisor)
-			FocusedStyle.Height(msg.Height-divisor)
+			ColumnStyle.Width(msg.Width / divisor)
+			FocusedStyle.Width(msg.Width / divisor)
+			ColumnStyle.Height(msg.Height - divisor)
+			FocusedStyle.Height(msg.Height - divisor)
 			m.InitLists(msg.Width, msg.Height)
 			m.loaded = true
 		}
@@ -131,8 +152,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Prev()
 		case "right", "l":
 			m.Next()
-		}
+		case "enter":
+			return m, m.MoveToNext()
+		case "n":
 
+		}
 	}
 
 	var cmd tea.Cmd
@@ -150,20 +174,20 @@ func (m Model) View() string {
 		inProgressview := m.lists[inProgress].View()
 		doneView := m.lists[done].View()
 		switch m.focused {
-		case inProgress: 
-		return lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			ColumnStyle.Render(todoView),
-			FocusedStyle.Render(inProgressview),
-			ColumnStyle.Render(doneView),
-		)	
+		case inProgress:
+			return lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				ColumnStyle.Render(todoView),
+				FocusedStyle.Render(inProgressview),
+				ColumnStyle.Render(doneView),
+			)
 		case done:
 			return lipgloss.JoinHorizontal(
 				lipgloss.Left,
 				ColumnStyle.Render(todoView),
 				ColumnStyle.Render(inProgressview),
 				FocusedStyle.Render(doneView),
-			)	
+			)
 		default:
 			return lipgloss.JoinHorizontal(
 				lipgloss.Left,
